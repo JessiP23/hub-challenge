@@ -2,7 +2,6 @@ import { Tldraw, createShapeId, toRichText, TLShape, Editor } from "tldraw";
 import "tldraw/tldraw.css";
 import { useState, useEffect, useRef } from "react";
 
-// AVL Tree node class
 class AVLNode {
   id: string;
   value: string;
@@ -25,13 +24,10 @@ export default function TldrawComponent() {
   const [nodeCount, setNodeCount] = useState(2);
   const editorRef = useRef<Editor | null>(null);
   
-  // Add/Remove node buttons
   const addNode = () => nodeCount < 6 && setNodeCount(nodeCount + 1);
   const removeNode = () => nodeCount > 2 && setNodeCount(nodeCount - 1);
 
-  // Refresh when nodeCount changes
   useEffect(() => {
-    // Simply dispatch a custom event that our editor will listen for
     if (editorRef.current) {
       window.dispatchEvent(new CustomEvent('nodeCountChanged', { detail: nodeCount }));
     }
@@ -50,38 +46,32 @@ export default function TldrawComponent() {
           onMount={(editor) => {
             editorRef.current = editor;
             
-            // Store references to shapes for tracking
             let treeRoot: AVLNode | null = null;
             let shapeMap = new Map<string, TLShape>();
-            let isUpdating = false; // Add flag to prevent infinite loops
-            let spokeShapes: string[] = []; // Track spoke IDs for movement tracking
+            let isUpdating = false; 
+            let spokeShapes: string[] = []; 
             
             const createAvlTree = (count = nodeCount) => {
-              if (isUpdating) return; // Prevent recursive calls
+              if (isUpdating) return;
               
               isUpdating = true;
               
-              // Calculate center of canvas - use viewport for better centering
               const viewport = editor.getViewportPageBounds();
               const prevHubX = treeRoot?.x || (viewport.width / 2 + viewport.x);
               const prevHubY = treeRoot?.y || (viewport.height / 2 + viewport.y);
               
-              // Clear canvas
               editor.selectAll();
               editor.deleteShapes(editor.getSelectedShapeIds());
               
-              // Reset tracking arrays
               shapeMap.clear();
               spokeShapes = [];
               
-              // Create hub shape (root node)
               const hubId = createShapeId();
               const hubX = prevHubX;
               const hubY = prevHubY;
               
               treeRoot = new AVLNode(hubId.toString(), "Hub", hubX, hubY);
               
-              // Create the hub shape
               editor.createShape({
                 id: hubId,
                 type: "text",
@@ -92,15 +82,13 @@ export default function TldrawComponent() {
                 },
               });
               
-              // Get the created shape and add it to our map
               const hubShape = editor.getShape(hubId);
               if (hubShape) {
                 shapeMap.set(hubId.toString(), hubShape);
               }
               
-              // Add a circle around the hub
               const circleId = createShapeId();
-              const circleRadius = 30; // Adjust as needed
+              const circleRadius = 30; 
               editor.createShape({
                 id: circleId,
                 type: "geo",
@@ -116,7 +104,6 @@ export default function TldrawComponent() {
                 },
               });
               
-              // Create spoke nodes in a balanced arrangement
               const radius = 100;
               for (let i = 0; i < count; i++) {
                 const angle = (i * 2 * Math.PI) / count;
@@ -124,11 +111,9 @@ export default function TldrawComponent() {
                 const y = hubY + radius * Math.sin(angle);
                 const spokeId = createShapeId();
                 
-                // Create child node in AVL tree
                 const childNode = new AVLNode(spokeId.toString(), `Spoke ${i+1}`, x, y);
                 treeRoot.children.push(childNode);
                 
-                // Create the spoke shape
                 editor.createShape({
                   id: spokeId,
                   type: "text",
@@ -139,18 +124,15 @@ export default function TldrawComponent() {
                   },
                 });
                 
-                // Get the created shape and add it to our map
                 const spokeShape = editor.getShape(spokeId);
                 if (spokeShape) {
                   shapeMap.set(spokeId.toString(), spokeShape);
                   spokeShapes.push(spokeId.toString());
                 }
                 
-                // Calculate circle edge point for line start
                 const circleEdgeX = hubX + (circleRadius * Math.cos(angle));
                 const circleEdgeY = hubY + (circleRadius * Math.sin(angle));
                 
-                // Create a line using a draw shape instead
                 const lineId = createShapeId();
                 editor.createShape({
                   id: lineId,
@@ -162,8 +144,8 @@ export default function TldrawComponent() {
                       {
                         type: 'straight',
                         points: [
-                          { x: circleEdgeX, y: circleEdgeY }, // Line starts at circle edge
-                          { x, y } // Line ends at spoke
+                          { x: circleEdgeX, y: circleEdgeY }, 
+                          { x, y } 
                         ]
                       }
                     ]
@@ -171,54 +153,43 @@ export default function TldrawComponent() {
                 });
               }
               
-              // Reset update flag after a small delay to ensure we're done with the update cycle
               setTimeout(() => {
                 isUpdating = false;
               }, 100);
             };
             
-            // Initial creation
             createAvlTree();
             
-            // Listen for nodeCount changes
             const nodeCountHandler = (event: Event) => {
               const customEvent = event as CustomEvent;
               console.log("Node count changed to:", customEvent.detail);
-              // Pass the new node count to createAvlTree
               createAvlTree(customEvent.detail);
             };
             
             window.addEventListener('nodeCountChanged', nodeCountHandler);
             
-            // Track both hub and spoke movements
             editor.on('change', () => {
               if (isUpdating || !treeRoot) return;
               
-              // Check if hub moved
               const hubShape = shapeMap.get(treeRoot.id);
               if (hubShape && (hubShape.x !== treeRoot.x || hubShape.y !== treeRoot.y)) {
                 console.log("Hub moved to:", hubShape.x, hubShape.y);
                 
-                // Calculate how much the hub moved
                 const deltaX = hubShape.x - treeRoot.x;
                 const deltaY = hubShape.y - treeRoot.y;
                 
-                // Update root position
                 treeRoot.x = hubShape.x;
                 treeRoot.y = hubShape.y;
                 
-                // Move all child nodes by the same amount
                 treeRoot.children.forEach(child => {
                   child.x += deltaX;
                   child.y += deltaY;
                 });
                 
-                // Now redraw with updated positions
                 createAvlTree();
                 return;
               }
               
-              // Check if any spoke moved
               for (const spokeId of spokeShapes) {
                 const spokeShape = shapeMap.get(spokeId);
                 const spokeNode = treeRoot.children.find(child => child.id === spokeId);
@@ -228,7 +199,7 @@ export default function TldrawComponent() {
                   console.log("Spoke moved:", spokeId);
                   spokeNode.x = spokeShape.x;
                   spokeNode.y = spokeShape.y;
-                  createAvlTree(); // Redraw with updated spoke position
+                  createAvlTree();
                   return;
                 }
               }
