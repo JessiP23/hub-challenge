@@ -98,6 +98,24 @@ export default function TldrawComponent() {
                 shapeMap.set(hubId.toString(), hubShape);
               }
               
+              // Add a circle around the hub
+              const circleId = createShapeId();
+              const circleRadius = 30; // Adjust as needed
+              editor.createShape({
+                id: circleId,
+                type: "geo",
+                x: hubX - circleRadius,
+                y: hubY - circleRadius,
+                props: {
+                  geo: "ellipse",
+                  w: circleRadius * 2,
+                  h: circleRadius * 2,
+                  dash: "draw",
+                  color: "black",
+                  fill: "none",
+                },
+              });
+              
               // Create spoke nodes in a balanced arrangement
               const radius = 100;
               for (let i = 0; i < count; i++) {
@@ -128,6 +146,10 @@ export default function TldrawComponent() {
                   spokeShapes.push(spokeId.toString());
                 }
                 
+                // Calculate circle edge point for line start
+                const circleEdgeX = hubX + (circleRadius * Math.cos(angle));
+                const circleEdgeY = hubY + (circleRadius * Math.sin(angle));
+                
                 // Create a line using a draw shape instead
                 const lineId = createShapeId();
                 editor.createShape({
@@ -140,8 +162,8 @@ export default function TldrawComponent() {
                       {
                         type: 'straight',
                         points: [
-                          { x: hubX, y: hubY },
-                          { x, y }
+                          { x: circleEdgeX, y: circleEdgeY }, // Line starts at circle edge
+                          { x, y } // Line ends at spoke
                         ]
                       }
                     ]
