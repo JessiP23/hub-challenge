@@ -56,7 +56,7 @@ export default function TldrawComponent() {
             let isUpdating = false; // Add flag to prevent infinite loops
             let spokeShapes: string[] = []; // Track spoke IDs for movement tracking
             
-            const createAvlTree = () => {
+            const createAvlTree = (count = nodeCount) => {
               if (isUpdating) return; // Prevent recursive calls
               
               isUpdating = true;
@@ -99,8 +99,8 @@ export default function TldrawComponent() {
               
               // Create spoke nodes in a balanced arrangement
               const radius = 100;
-              for (let i = 0; i < nodeCount; i++) {
-                const angle = (i * 2 * Math.PI) / nodeCount;
+              for (let i = 0; i < count; i++) {
+                const angle = (i * 2 * Math.PI) / count;
                 const x = hubX + radius * Math.cos(angle);
                 const y = hubY + radius * Math.sin(angle);
                 const spokeId = createShapeId();
@@ -159,11 +159,10 @@ export default function TldrawComponent() {
             
             // Listen for nodeCount changes
             const nodeCountHandler = (event: Event) => {
-              if (!isUpdating) {
-                const customEvent = event as CustomEvent;
-                console.log("Node count changed to:", customEvent.detail);
-                createAvlTree();
-              }
+              const customEvent = event as CustomEvent;
+              console.log("Node count changed to:", customEvent.detail);
+              // Pass the new node count to createAvlTree
+              createAvlTree(customEvent.detail);
             };
             
             window.addEventListener('nodeCountChanged', nodeCountHandler);
@@ -176,9 +175,23 @@ export default function TldrawComponent() {
               const hubShape = shapeMap.get(treeRoot.id);
               if (hubShape && (hubShape.x !== treeRoot.x || hubShape.y !== treeRoot.y)) {
                 console.log("Hub moved to:", hubShape.x, hubShape.y);
+                
+                // Calculate how much the hub moved
+                const deltaX = hubShape.x - treeRoot.x;
+                const deltaY = hubShape.y - treeRoot.y;
+                
+                // Update root position
                 treeRoot.x = hubShape.x;
                 treeRoot.y = hubShape.y;
-                createAvlTree(); // Redraw the tree centered on the new hub position
+                
+                // Move all child nodes by the same amount
+                treeRoot.children.forEach(child => {
+                  child.x += deltaX;
+                  child.y += deltaY;
+                });
+                
+                // Now redraw with updated positions
+                createAvlTree();
                 return;
               }
               
