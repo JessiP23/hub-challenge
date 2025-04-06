@@ -42,8 +42,13 @@ export default function TldrawComponent() {
             // Store references to shapes for tracking
             let treeRoot: AVLNode | null = null;
             let shapeMap = new Map<string, TLShape>();
+            let isUpdating = false; // Add flag to prevent infinite loops
             
             const createAvlTree = () => {
+              if (isUpdating) return; // Prevent recursive calls
+              
+              isUpdating = true;
+              
               // Clear canvas
               editor.selectAll();
               editor.deleteShapes(editor.getSelectedShapeIds());
@@ -120,30 +125,49 @@ export default function TldrawComponent() {
                   },
                 });
               }
+              
+              // Reset update flag after a small delay to ensure we're done with the update cycle
+              setTimeout(() => {
+                isUpdating = false;
+              }, 100);
             };
             
             // Initial creation
             createAvlTree();
             
-            // Watch for changes to update the tree
+            // Watch for changes but prevent infinite loops
+            let updateTimeout: any = null;
             editor.on('change', () => {
-              if (!treeRoot) return;
+              if (isUpdating || !treeRoot) return;
               
-              // Check if hub moved
-              const hubShape = shapeMap.get(treeRoot.id);
-              if (hubShape && (hubShape.x !== treeRoot.x || hubShape.y !== treeRoot.y)) {
-                treeRoot.x = hubShape.x;
-                treeRoot.y = hubShape.y;
-                createAvlTree(); // Redraw the tree
+              // Clear any pending updates
+              if (updateTimeout) clearTimeout(updateTimeout);
+              
+              // Debounce the update to avoid excessive redraws
+              updateTimeout = setTimeout(() => {
+                // Check if treeRoot is still valid when timeout executes
+                if (!treeRoot) return;
+                
+                // Check if hub moved
+                const hubShape = shapeMap.get(treeRoot.id);
+                if (hubShape && (hubShape.x !== treeRoot.x || hubShape.y !== treeRoot.y)) {
+                  treeRoot.x = hubShape.x;
+                  treeRoot.y = hubShape.y;
+                  createAvlTree(); // Redraw the tree
+                }
+              }, 200);
+            });
+            
+            // Handle node count changes
+            editor.on('update', () => {
+              if (!isUpdating) {
+                createAvlTree();
               }
             });
             
-            // Update when node count changes
-            editor.on('update', () => {
-              createAvlTree();
-            });
-            
-            return () => {};
+            return () => {
+              if (updateTimeout) clearTimeout(updateTimeout);
+            };
           }}
         />
       </div>
