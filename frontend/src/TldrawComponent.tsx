@@ -1,6 +1,6 @@
-import { Tldraw, createShapeId, toRichText, TLShape } from "tldraw";
+import { Tldraw, createShapeId, toRichText, TLShape, Editor } from "tldraw";
 import "tldraw/tldraw.css";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 
 // AVL Tree node class
 class AVLNode {
@@ -23,10 +23,19 @@ class AVLNode {
 
 export default function TldrawComponent() {
   const [nodeCount, setNodeCount] = useState(2);
+  const editorRef = useRef<Editor | null>(null);
   
   // Add/Remove node buttons
   const addNode = () => nodeCount < 6 && setNodeCount(nodeCount + 1);
   const removeNode = () => nodeCount > 2 && setNodeCount(nodeCount - 1);
+
+  // Refresh when nodeCount changes
+  useEffect(() => {
+    // Simply dispatch a custom event that our editor will listen for
+    if (editorRef.current) {
+      window.dispatchEvent(new CustomEvent('nodeCountChanged', { detail: nodeCount }));
+    }
+  }, [nodeCount]);
 
   return (
     <div>
@@ -35,28 +44,39 @@ export default function TldrawComponent() {
         <span style={{ margin: "0 10px" }}>Spokes: {nodeCount}</span>
         <button onClick={addNode} disabled={nodeCount >= 6}>Add Spoke</button>
       </div>
-      <div style={{ position: "fixed", width: "50vh", height: "50vh" }}>
+      <div style={{ position: "fixed", width: "80vh", height: "80vh" }}>
         <Tldraw
           hideUi={true}
           onMount={(editor) => {
+            editorRef.current = editor;
+            
             // Store references to shapes for tracking
             let treeRoot: AVLNode | null = null;
             let shapeMap = new Map<string, TLShape>();
             let isUpdating = false; // Add flag to prevent infinite loops
+            let spokeShapes: string[] = []; // Track spoke IDs for movement tracking
             
             const createAvlTree = () => {
               if (isUpdating) return; // Prevent recursive calls
               
               isUpdating = true;
               
+              // Remember hub position if it exists
+              const prevHubX = treeRoot?.x || 150;
+              const prevHubY = treeRoot?.y || 150;
+              
               // Clear canvas
               editor.selectAll();
               editor.deleteShapes(editor.getSelectedShapeIds());
               
+              // Reset tracking arrays
+              shapeMap.clear();
+              spokeShapes = [];
+              
               // Create hub shape (root node)
               const hubId = createShapeId();
-              const hubX = treeRoot?.x || 150;
-              const hubY = treeRoot?.y || 150;
+              const hubX = prevHubX;
+              const hubY = prevHubY;
               
               treeRoot = new AVLNode(hubId.toString(), "Hub", hubX, hubY);
               
@@ -104,11 +124,13 @@ export default function TldrawComponent() {
                 const spokeShape = editor.getShape(spokeId);
                 if (spokeShape) {
                   shapeMap.set(spokeId.toString(), spokeShape);
+                  spokeShapes.push(spokeId.toString());
                 }
                 
                 // Create a line using a draw shape instead
+                const lineId = createShapeId();
                 editor.createShape({
-                  id: createShapeId(),
+                  id: lineId,
                   type: "draw",
                   x: 0,
                   y: 0,
@@ -135,38 +157,49 @@ export default function TldrawComponent() {
             // Initial creation
             createAvlTree();
             
-            // Watch for changes but prevent infinite loops
-            let updateTimeout: any = null;
+            // Listen for nodeCount changes
+            const nodeCountHandler = (event: Event) => {
+              if (!isUpdating) {
+                const customEvent = event as CustomEvent;
+                console.log("Node count changed to:", customEvent.detail);
+                createAvlTree();
+              }
+            };
+            
+            window.addEventListener('nodeCountChanged', nodeCountHandler);
+            
+            // Track both hub and spoke movements
             editor.on('change', () => {
               if (isUpdating || !treeRoot) return;
               
-              // Clear any pending updates
-              if (updateTimeout) clearTimeout(updateTimeout);
+              // Check if hub moved
+              const hubShape = shapeMap.get(treeRoot.id);
+              if (hubShape && (hubShape.x !== treeRoot.x || hubShape.y !== treeRoot.y)) {
+                console.log("Hub moved to:", hubShape.x, hubShape.y);
+                treeRoot.x = hubShape.x;
+                treeRoot.y = hubShape.y;
+                createAvlTree(); // Redraw the tree centered on the new hub position
+                return;
+              }
               
-              // Debounce the update to avoid excessive redraws
-              updateTimeout = setTimeout(() => {
-                // Check if treeRoot is still valid when timeout executes
-                if (!treeRoot) return;
+              // Check if any spoke moved
+              for (const spokeId of spokeShapes) {
+                const spokeShape = shapeMap.get(spokeId);
+                const spokeNode = treeRoot.children.find(child => child.id === spokeId);
                 
-                // Check if hub moved
-                const hubShape = shapeMap.get(treeRoot.id);
-                if (hubShape && (hubShape.x !== treeRoot.x || hubShape.y !== treeRoot.y)) {
-                  treeRoot.x = hubShape.x;
-                  treeRoot.y = hubShape.y;
-                  createAvlTree(); // Redraw the tree
+                if (spokeShape && spokeNode && 
+                    (spokeShape.x !== spokeNode.x || spokeShape.y !== spokeNode.y)) {
+                  console.log("Spoke moved:", spokeId);
+                  spokeNode.x = spokeShape.x;
+                  spokeNode.y = spokeShape.y;
+                  createAvlTree(); // Redraw with updated spoke position
+                  return;
                 }
-              }, 200);
-            });
-            
-            // Handle node count changes
-            editor.on('update', () => {
-              if (!isUpdating) {
-                createAvlTree();
               }
             });
             
             return () => {
-              if (updateTimeout) clearTimeout(updateTimeout);
+              window.removeEventListener('nodeCountChanged', nodeCountHandler);
             };
           }}
         />
