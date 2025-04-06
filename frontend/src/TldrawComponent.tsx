@@ -7,20 +7,29 @@ export default function TldrawComponent() {
       <Tldraw
         hideUi={true}
         onMount={(editor) => {
-          const helloWorldShapeId = createShapeId();
+          // Create a hub shape at the center
           editor.createShape({
-            id: helloWorldShapeId,
+            id: createShapeId(),
             type: "text",
-            x: 50,
-            y: 50,
+            x: 150,
+            y: 150,
             props: {
-              richText: toRichText("Hello world!"),
+              richText: toRichText("Hub"),
             },
           });
-
-          return () => {
-            editor.deleteShape(helloWorldShapeId);
-          };
+          // Create two spoke shapes positioned to the left and right
+          [{ x: 50, y: 150 }, { x: 250, y: 150 }].forEach((pos) =>
+            editor.createShape({
+              id: createShapeId(),
+              type: "text",
+              x: pos.x,
+              y: pos.y,
+              props: {
+                richText: toRichText("Spoke"),
+              },
+            })
+          );
+          return () => {};
         }}
       />
     </div>
