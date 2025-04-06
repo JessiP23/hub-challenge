@@ -61,9 +61,10 @@ export default function TldrawComponent() {
               
               isUpdating = true;
               
-              // Remember hub position if it exists
-              const prevHubX = treeRoot?.x || 150;
-              const prevHubY = treeRoot?.y || 150;
+              // Calculate center of canvas - use viewport for better centering
+              const viewport = editor.getViewportPageBounds();
+              const prevHubX = treeRoot?.x || (viewport.width / 2 + viewport.x);
+              const prevHubY = treeRoot?.y || (viewport.height / 2 + viewport.y);
               
               // Clear canvas
               editor.selectAll();
